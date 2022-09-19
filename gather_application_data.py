@@ -432,9 +432,6 @@ if __name__ == "__main__":
     jss, api_user, api_pw, json_path, log_folder_path, tmp_path, debug_mode_tf, test_mode_tf = init_vars()
     create_script_directory(14)
     api_token = generate_auth_token()
-    """app bundle id is gathered in individual mobile device record.  
-    Record details in XML we're creating are confirmed using app_bundle_ids 
-    in order to match up ID with app name"""
     app_ids, app_names, app_bundle_ids = gather_application_ids()
     all_ids = get_all_ids("mobiledevices", "all_mobile_devices.json")
     parse_mobile_device_info()
