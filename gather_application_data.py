@@ -20,15 +20,16 @@ def init_vars():
     server_type = os.environ.get("SERVERTYPE")
     home = str(Path.home())
     if server_type == "windows":
-        xml_path = f"{home}\\JamfAPISync\\"
-        log_folder_path = f"{xml_path}\\Logs\\"
-        tmp_path = f"{xml_path}\\tmp\\"
+        json_path = f"{home}\\JamfAPISync\\"
+        log_folder_path = f"{json_path}\\Logs\\"
+        tmp_path = f"{json_path}\\tmp\\"
     else:
-        xml_path = f"{home}/JamfAPISync/"
-        log_folder_path = f"{xml_path}/Logs/"
-        tmp_path = f"{xml_path}/tmp/"
+        json_path = f"{home}/JamfAPISync/"
+        log_folder_path = f"{json_path}/Logs/"
+        tmp_path = f"{json_path}/tmp/"
     debug_mode_tf = True
-    return jss, api_user, api_pw, xml_path, log_folder_path, tmp_path, debug_mode_tf
+    test_mode_tf = False
+    return jss, api_user, api_pw, json_path, log_folder_path, tmp_path, debug_mode_tf, test_mode_tf
 
 
 def generate_auth_token():
@@ -108,9 +109,9 @@ def get_all_ids(device_type, filename):
     check_response_code(str(response), api_url)
     reply = response.text  # just the json, to save to file
     # write JSON to /tmp/jss_temp.....
-    print(reply, file=open(xml_path + filename, "w+", encoding='utf-8'))  # writes output to /tmp
+    print(reply, file=open(json_path + filename, "w+", encoding='utf-8'))  # writes output to /tmp
 
-    all_ids_json_filepath = open(xml_path + filename, encoding='utf-8')
+    all_ids_json_filepath = open(json_path + filename, encoding='utf-8')
     all_ids_json_data = json.load(all_ids_json_filepath)
 
     total_id_count = all_ids_json_data['totalCount']
@@ -141,9 +142,9 @@ def get_all_ids(device_type, filename):
         check_response_code(str(response), api_url)
         reply = response.text
         # write JSON to /tmp/jss_temp.....
-        print(reply, file=open(xml_path + filename, "w+", encoding='utf-8'))
+        print(reply, file=open(json_path + filename, "w+", encoding='utf-8'))
 
-        all_ids_json_filepath = open(xml_path + filename, encoding='utf-8')
+        all_ids_json_filepath = open(json_path + filename, encoding='utf-8')
         all_ids_json_data = json.load(all_ids_json_filepath)
 
         id_index = 0
@@ -160,7 +161,10 @@ def get_all_ids(device_type, filename):
 
         write_to_logfile(f"INFO: IDs retrieved [{all_ids_count} of {total_id_count}].....", now_formatted, "std")
     all_ids_json_filepath.close()
-    os.remove(xml_path + filename)
+    os.remove(json_path + filename)
+    if test_mode_tf:
+        all_ids = all_ids[0]
+        write_to_logfile(f"TEST MODE: enabled and stopping at first device object [id: {all_ids}]. JSON will display all apps without full device information.....", now_formatted, "std")
     return all_ids
 
 
@@ -171,7 +175,7 @@ def parse_mobile_device_info():
         # make api call to retrieve inventory for each computer
         # use subset/Applications to only return the list of applications by mobile device ID
         api_url = f"{jss}/JSSResource/mobiledevices/id/{id}/subset/Applications"
-        tmp_file = f"{xml_path}_mobileDeviceID_{id}.xml"
+        tmp_file = f"{json_path}_mobileDeviceID_{id}.xml"
         payload = {}
         headers = {
             'Accept': 'application/xml',
@@ -211,7 +215,7 @@ def gather_application_ids():
     # make api call to retrieve inventory for each computer
     # use subset/Applications to only return the list of applications by mobile device ID
     api_url = f"{jss}/JSSResource/mobiledeviceapplications"
-    tmp_file = f"{xml_path}allMobileDeviceApplications.json"
+    tmp_file = f"{json_path}allMobileDeviceApplications.json"
     payload = {}
     headers = {
         'Accept': 'application/json',
@@ -283,7 +287,7 @@ def insert_into_json(filename, mobile_device_id, mobile_device_application_statu
 
 
 def compile_json_files_write_to_main_output():
-    filename = xml_path + f"mobile_applications_{now_formatted}.json"
+    filename = json_path + f"mobile_applications_{now_formatted}.json"
     write_to_logfile(f"UPDATE: mobile device parsing complete! Assembling JSON output file at [{filename}] ", now_formatted, "debug")
     json_data = {
         "mobile_device_applications": [
@@ -377,7 +381,7 @@ def script_duration(start_or_stop):
         else:
             secs = int(script_duration_in_seconds)
 
-        write_to_logfile(f"\n\n\n---------------\nSUCCESS: script completed.  JSON file can be found in {xml_path}", now_formatted, "std")
+        write_to_logfile(f"\n\n\n---------------\nSUCCESS: script completed.  JSON file can be found in {json_path}", now_formatted, "std")
         write_to_logfile(f"SCRIPT DURATION: {days} day(s) {hours} hour(s) {mins} minute(s) {secs} second(s)", now_formatted,
                          "std")
         print("[SCRIPT COMPLETE!]")
@@ -392,9 +396,9 @@ def create_script_directory(days_ago_to_delete_logs):
         # Create a new directory because it does not exist
         os.makedirs(log_folder_path)
         os.makedirs(tmp_path)
-        write_to_logfile(f"CREATE: new directories created in [{xml_path}]!", now_formatted, "debug")
+        write_to_logfile(f"CREATE: new directories created in [{json_path}]!", now_formatted, "debug")
     else:
-        write_to_logfile(f"INFO: the script directories already exist. Check [{xml_path}]", now_formatted, "debug")
+        write_to_logfile(f"INFO: the script directories already exist. Check [{json_path}]", now_formatted, "debug")
 
         x_days_ago = time.time() - (days_ago_to_delete_logs * 86400)
         write_to_logfile(f"DELETE: deleting log files older than {days_ago_to_delete_logs} days", now_formatted, "debug")
@@ -425,7 +429,7 @@ def delete_tmp_json_files(log_output):
 if __name__ == "__main__":
     script_duration("start")
     now_formatted = now_date_time()
-    jss, api_user, api_pw, xml_path, log_folder_path, tmp_path, debug_mode_tf = init_vars()
+    jss, api_user, api_pw, json_path, log_folder_path, tmp_path, debug_mode_tf, test_mode_tf = init_vars()
     create_script_directory(14)
     api_token = generate_auth_token()
     """app bundle id is gathered in individual mobile device record.  
@@ -433,8 +437,6 @@ if __name__ == "__main__":
     in order to match up ID with app name"""
     app_ids, app_names, app_bundle_ids = gather_application_ids()
     all_ids = get_all_ids("mobiledevices", "all_mobile_devices.json")
-    # create blank XML structure
-    # generate_xml(xml_path + f"mobile_applications_{now_formatted}.xml")
     parse_mobile_device_info()
     compile_json_files_write_to_main_output()
     script_duration("stop")
