@@ -1,4 +1,4 @@
-# Jamf Mobile Applications Data to JSON
+# Jamf Mobile Application Data to JSON
 
 ## Purpose
 The purpose of this script is to sync mobile device applications via the Jamf Classic API and append various data elements to a primary JSON file that can be uploaded to a BI tool.
