@@ -81,7 +81,13 @@ def check_response_code(response_code: str, api_call: str):
         write_to_logfile(f"ERROR: response returned for {api_call} [{response_code}]", now_formatted, "std")
         print(f"ERROR: response returned [{response_code}]")
         print(response_code)
-        sys.exit(1)
+
+        if response_code == "404" and "/mobiledevices/id/" in api_call:
+            write_to_logfile(f"ERROR: 404 returned likely because object was deleted after script started running. Continuing......", now_formatted, "std")
+            print(f"ERROR: no Jamf object at {api_call} [continuing]")
+            return "404_continue"
+        else:
+            sys.exit(1)
     else:
         write_to_logfile(f"INFO: http response for {api_call} [{response_code}]", now_formatted, "debug")
 
@@ -163,7 +169,12 @@ def get_all_ids(device_type, filename):
     all_ids_json_filepath.close()
     os.remove(json_path + filename)
     if test_mode_tf:
-        all_ids = all_ids[0]
+        first_id = all_ids[0]
+        all_ids = []
+        all_ids.append(first_id)
+        # insert '999999' into index 0 of all_ids so that it will create a 404 error scenario
+        all_ids.insert(0, '999999')
+        print(f"Testing using the following ids: {all_ids}")
         write_to_logfile(f"TEST MODE: enabled and stopping at first device object [id: {all_ids}]. JSON will display all apps without full device information.....", now_formatted, "std")
     return all_ids
 
@@ -184,29 +195,33 @@ def parse_mobile_device_info():
 
         check_token_expiration_time()
         response = requests.request("GET", api_url, headers=headers, data=payload)
-        check_response_code(str(response), api_url)
-        reply = response.text  # just the xml, to save to file
-        # write XML to /tmp folder
-        print(reply, file=open(tmp_file, "w+", encoding='utf-8'))
-        # parse all computer info
-        tree = ET.parse(tmp_file)
-        root = tree.getroot()
+        # check_response_code will also handle if an object has been deleted in Jamf Pro after the script starts
+        # we'll use the "404_continue" string to identify the scenario and bypass the rest of the function
+        response_validation = check_response_code(str(response), api_url)
 
-        mobile_device_id = id
-        # mobile_device_application_name = " "
-        # mobile_device_application_short_version = " "
-        # mobile_device_application_status = " "
-        # mobile_device_identifier = " "
-        for a in root.findall('.//application'):
-            # mobile_device_application_name = getattr(a.find('application_name'), 'text', None)
-            mobile_device_identifier = getattr(a.find('identifier'), 'text', None)
-            mobile_device_application_status = getattr(a.find('application_status'), 'text', None)
-            mobile_device_application_short_version = getattr(a.find('application_short_version'), 'text', None)
-            # append values to JSON output files
-            bundle_id_without_dots = mobile_device_identifier.replace(".", "-")
-            filename = f"{tmp_path}{bundle_id_without_dots}.json"
-            insert_into_json(filename, mobile_device_id, mobile_device_application_status, mobile_device_application_short_version)
-        os.remove(tmp_file)
+        if response_validation != "404_continue":
+            reply = response.text  # just the xml, to save to file
+            # write XML to /tmp folder
+            print(reply, file=open(tmp_file, "w+", encoding='utf-8'))
+            # parse all computer info
+            tree = ET.parse(tmp_file)
+            root = tree.getroot()
+
+            mobile_device_id = id
+            for a in root.findall('.//application'):
+                mobile_device_identifier = getattr(a.find('identifier'), 'text', None)
+                mobile_device_application_status = getattr(a.find('application_status'), 'text', None)
+                mobile_device_application_short_version = getattr(a.find('application_short_version'), 'text', None)
+                # append values to JSON output files
+                bundle_id_without_dots = mobile_device_identifier.replace(".", "-")
+                filename = f"{tmp_path}{bundle_id_without_dots}.json"
+                insert_into_json(filename, mobile_device_id, mobile_device_application_status, mobile_device_application_short_version)
+
+            try:
+                os.remove(tmp_file)
+            # except error if the file isn't closed by etree
+            except PermissionError:
+                write_to_logfile(f"ERROR: unable to delete tmp file {tmp_file}", now_formatted, "std")
 
 
 def gather_application_ids():
@@ -245,7 +260,11 @@ def gather_application_ids():
         index += 1
 
     all_app_ids_json_filepath.close()
-    os.remove(tmp_file)
+    try:
+        os.remove(tmp_file)
+    # except error if the file isn't closed by etree
+    except PermissionError:
+        write_to_logfile(f"ERROR: unable to delete tmp file {tmp_file}", now_formatted, "std")
     return app_ids, app_names, app_bundle_ids
 
 
@@ -437,3 +456,5 @@ if __name__ == "__main__":
     parse_mobile_device_info()
     compile_json_files_write_to_main_output()
     script_duration("stop")
+
+
