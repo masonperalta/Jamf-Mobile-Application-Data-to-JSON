@@ -176,6 +176,7 @@ def get_all_ids(device_type, filename):
         all_ids.insert(0, '999999')
         print(f"Testing using the following ids: {all_ids}")
         write_to_logfile(f"TEST MODE: enabled and stopping at first device object [id: {all_ids}]. JSON will display all apps without full device information.....", now_formatted, "std")
+        write_to_logfile(f"TEST MODE: additionally, ID 999999 will be used to test 404 error for removed record after script beginning scenario", now_formatted, "std")
     return all_ids
 
 
@@ -440,9 +441,24 @@ def delete_tmp_json_files(log_output):
         os.remove(path)
         tmp_files_deleted += 1
 
+    def delete_tmp_api_files(startswith_to_delete, count_of_deleted_files):
+        delete_path = json_path
+        for fname in os.listdir(delete_path):
+            if fname.startswith(startswith_to_delete):
+                try:
+                    os.remove(os.path.join(delete_path, fname))
+                # except error if the file isn't closed by etree
+                except PermissionError:
+                    write_to_logfile(f"ERROR: unable to delete tmp file {fname}", now_formatted, "std")
+                count_of_deleted_files += 1
+        return count_of_deleted_files
+
+    tmp_files_deleted = delete_tmp_api_files("allMobileDeviceApplications.json", tmp_files_deleted)
+    tmp_files_deleted = delete_tmp_api_files("_mobileDeviceID_", tmp_files_deleted)
+
     if log_output:
         write_to_logfile(f"DELETE: deleting any temp files from last session", now_formatted, "std")
-        write_to_logfile(f"DELETE: temp files deleted in {tmp_path} [{tmp_files_deleted}]", now_formatted, "std")
+        write_to_logfile(f"DELETE: temp files deleted [{tmp_files_deleted}]", now_formatted, "std")
 
 
 if __name__ == "__main__":
